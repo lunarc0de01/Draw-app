@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { middleware } from "./middleware.js";
 import prismaClient from "@repo/db/client"
-import { CreateUserSchema, SigninSchema, CreateRoomSchema } from "@repo/common/types";
+import { CreateUserSchema, SigninSchema, CreateRoomSchema, CreateChatSchema } from "@repo/common/types";
 
 const app = express();
 app.use(express.json());
@@ -45,7 +45,7 @@ app.post("/signin", async (req, res) => {
         })
         return;
     }
-
+    // add try catch here
     const user = await prismaClient.user.findUnique({
         where: {
             email: parsedData.data?.email,
@@ -95,6 +95,58 @@ app.post("/room", middleware, async (req, res) => {
         })
     }
 })
+
+app.post("/chat", middleware, async (req, res) => {
+    const parsedData = CreateChatSchema.safeParse(req.body);
+    if (!parsedData.success) {
+        res.status(411).json({
+            message: "Invalid Input"
+        })
+        return;
+    }
+    // @ts-ignore: TODO: Fix this
+    const userId = req.userId;
+
+    try {
+        const chat = await prismaClient.chat.create({
+            data : {
+                message: parsedData.data.message,
+                roomId: parsedData.data.roomId,
+                userId: userId
+            }
+        })
+        res.status(200).json({
+            chat: chat
+        })
+    } catch (e) {
+        res.status(411).json({
+            message: "Room already exists with this name"
+        })
+    }
+})
+
+app.get("/room/:slug", middleware, async (req, res) => {
+
+    const { slug } = req.params;
+    try {
+        const room = await prismaClient.room.findFirst({
+            where: {
+                id: Number(slug)
+            },
+            include: {
+                chats: true
+            }
+        })
+        if(!room) {
+            return res.status(404).json({
+                error: "Not found"
+            })
+        }
+        res.json(room);
+    } catch (e) {
+        res.status(500).json({ error: "internal server error"})
+    }
+} )
 
 
 
